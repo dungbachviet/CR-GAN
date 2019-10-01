@@ -32,9 +32,7 @@ def get_multiPIE_img(img_path):
     # img_path: /home/yt219/data/multi_PIE_crop_128/192/192_01_02_140_07_crop_128.png
     tmp = random.randint(0, 8) # get a random digit from (>= 0 and <=8) representing for index 1 of 9 viewpoint indices
     view2 = tmp
-
     view = views[tmp]
-
     token = img_path.split('/')
     name = token[-1]
         
@@ -42,12 +40,13 @@ def get_multiPIE_img(img_path):
     ID = token[0]
     status = token[2]
     bright = token[4]
-        
+    # Simply create an image of other viewpoint (view2)
     img2_path = '/home/yt219/data/multi_PIE_crop_128/' + ID + '/' + ID + '_01_' + status + '_' + view + '_' + bright + '_crop_128.png'
-    img2 = read_img( img2_path )
+    img2 = read_img( img2_path ) # read the new-view image and return its digital array
     img2 = img2.resize((128,128), Image.ANTIALIAS)
-    return view2, img2
+    return view2, img2 # return image of new viewpoint
 
+# Get a pair of (view, image) from 300w_LP dataset
 def get_300w_LP_img(img_path):
     # img_path = '/home/yt219/data/crop_0822/AFW_resize/AFW_1051618982_1_0_128.jpg'
     # txt_path: /home/yt219/data/300w_LP_size_128/AFW_resize/AFW_1051618982_1_0_128_pose_shape_expression_128.txt 
@@ -57,6 +56,8 @@ def get_300w_LP_img(img_path):
             left = i
             break
     
+    # This dataset needs a .txt file to identify the view of one image
+    # This step to randomly choose one image belong to 1 in 9 specified viewpoints
     view2 = -1
     while(view2 < 0):
         tmp = random.randint(0, 17)
@@ -87,12 +88,15 @@ def get_300w_LP_img(img_path):
             elif yaw >= d_60-d_range and yaw <= d_60:
                 view2 = 8
     
+    # When find out the suited image 
+    # Read that image and return its digital arrays that has been resized into (128,128) dimension
     new_img = img_path[:left+1] + str(tmp) + '_128.jpg'
     img2 = read_img( new_img )
     img2 = img2.resize((128,128), Image.ANTIALIAS)
-    
     return view2, img2
 
+# Class for managing the process of get images from dataset
+# This class inherits from module of data.Dataset for integrating some useful transfromations and other utilities
 class ImageList(data.Dataset):
     def __init__( self, list_file, transform=None, is_train=True, 
                   img_shape=[128,128] ):
