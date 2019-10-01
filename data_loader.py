@@ -1,5 +1,6 @@
 # Xi Peng, Feb 2017
 # Yu Tian, Apr 2017
+# Manage some of operations: manage how to get dataset (transfrom, resize,...) 
 import os, sys
 import numpy as np
 from PIL import Image
