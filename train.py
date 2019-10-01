@@ -200,7 +200,7 @@ for epoch in range(args.epochs):
         grads = autograd.grad(outputs = D_x_hat_s,
                               inputs = x_hat,
                               grad_outputs = torch.ones(D_x_hat_s.size()).cuda(),
-                              retain_graph = True,th 1: (v, z)-->G_vzx-->x_bar--> D_xvs( (v,x_bar), (v,x_real) )
+                              retain_graph = True,
                               create_graph = True,
                               only_inputs = True)[0]
         grad_norm = grads.pow(2).sum().sqrt()
