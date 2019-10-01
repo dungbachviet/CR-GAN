@@ -98,37 +98,43 @@ def get_300w_LP_img(img_path):
 # Class for managing the process of get images from dataset
 # This class inherits from module of data.Dataset for integrating some useful transfromations and other utilities
 class ImageList(data.Dataset):
+    # We can put in some necessary parameters here (to get out useful information from dataset)
     def __init__( self, list_file, transform=None, is_train=True, 
                   img_shape=[128,128] ):
-        img_list = [line.rstrip('\n') for line in open(list_file)]
+        img_list = [line.rstrip('\n') for line in open(list_file)] # list_file contains image paths (once per each line)
         print('total %d images' % len(img_list))
 
         self.img_list = img_list
         self.transform = transform
         self.is_train = is_train
         self.img_shape = img_shape
-        self.transform_img = transforms.Compose([self.transform])
+        self.transform_img = transforms.Compose([self.transform]) # contain a chain of image transformation operations 
 
+    
+    # Automatically get the two random pairs of (view, image) (same identity at 2 viewpoints) for one training instance
+    # index: the system automatically create the random value for index in range of 0-->len(dataset)-1
     def __getitem__(self, index):
         # img_name: /home/yt219/data/multi_PIE_crop_128/192/192_01_02_140_07_crop_128.png
         img1_path = self.img_list[index]
-        token = img1_path.split(' ')
+        token = img1_path.split(' ') # split to get 2 informations: image path and its viewpoint
+        img1_fpath = token[0] # image path
+        view1 = int(token[1]) # viewpoint
         
-        img1_fpath = token[0]
-        view1 = int(token[1])
+        img1 = read_img(img1_fpath) # read the image and return its digital array
         
-        img1 = read_img( img1_fpath )
-
+        # Check whether to get images from MultiPIE or 300wLP dataset
         if img1_fpath.find('multi_PIE') > -1:
             view2, img2 = get_multiPIE_img(img1_fpath)
         else:
             view2, img2 = get_300w_LP_img(img1_fpath)
-
+        
+        # Check whether or not using image transformation
         if self.transform_img is not None:
             img1 = self.transform_img(img1) # [0,1], c x h x w
             img2 = self.transform_img(img2)
 
-        return view1, view2, img1, img2
-
+        return view1, view2, img1, img2 # Return 2 images of 2 viewpoints of the one same identity
+    
+    # Size of dataset
     def __len__(self):
         return len(self.img_list)
