@@ -10,7 +10,7 @@ import torchvision.transforms as transforms
 import pdb
 
 dd = pdb.set_trace
-
+# 9 viewpoints (they all were rotated evenly)('200','190'... are only symbols of the author)
 views = ['200', '190', '041', '050', '051', '140', '130', '080', '090']
 
 pi = 3.1416 # 180 degree
@@ -23,14 +23,14 @@ d_30 = d_45 - d_15
 
 def read_img(img_path):
     # img_path: /home/yt219/data/multi_PIE_crop_128/192/192_01_02_140_07_crop_128.png
-    img = Image.open(img_path).convert('RGB')
+    img = Image.open(img_path).convert('RGB') # read image and return in format of a digital array
     img = img.resize((128,128), Image.ANTIALIAS)
     return img
 
+# Get a pair of (viewpoint, image) from MultiPIE dataset
 def get_multiPIE_img(img_path):
-
     # img_path: /home/yt219/data/multi_PIE_crop_128/192/192_01_02_140_07_crop_128.png
-    tmp = random.randint(0, 8)
+    tmp = random.randint(0, 8) # get a random digit from (>= 0 and <=8) representing for index 1 of 9 viewpoint indices
     view2 = tmp
 
     view = views[tmp]
