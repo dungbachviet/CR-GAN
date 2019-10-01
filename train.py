@@ -16,15 +16,15 @@ import data_loader
 from torch.autograd import Variable
 from model import _G_xvz, _G_vzx, _D_xvs
 from itertools import *
-import pdb
+import pdb # for debugging at source code lines
 
 dd = pdb.set_trace
 
+# Command-line interface communication
 parser = argparse.ArgumentParser()
-
-parser.add_argument("-d", "--data_list", type=str, default="./list.txt")
+parser.add_argument("-d", "--data_list", type=str, default="./list.txt") # path to image list for training
 parser.add_argument("-ns", "--nsnapshot", type=int, default=700)
-parser.add_argument("-b", "--batch_size", type=int, default=64) # 16
+parser.add_argument("-b", "--batch_size", type=int, default=64) # mini-batch size
 parser.add_argument("-lr", "--learning_rate", type=float, default=1e-4)
 parser.add_argument("-m" , "--momentum", type=float, default=0.) # 0.5
 parser.add_argument("-m2", "--momentum2", type=float, default=0.9) # 0.999
@@ -38,44 +38,47 @@ parser.add_argument('--epochs', default=25, type=int, metavar='N',
 
 # Initialize networks
 def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        m.weight.data.normal_(0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
+    classname = m.__class__.__name__ # ??? What is the inner nature
+    if classname.find('Conv') != -1: # Initialize for convolution weights
+        m.weight.data.normal_(0.0, 0.02) # ??? draw random values according to mean and variance
+    elif classname.find('BatchNorm') != -1: # ??? Initialize for batch-norm. How specific
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
     elif classname.find('LayerNorm') != -1:
         m.weight.data.normal_(1.0, 0.02)
         m.bias.data.fill_(0)
-    elif classname.find('Linear') != -1:
+    elif classname.find('Linear') != -1: # ??? Is that for Fully-Connected weights
         m.weight.data.normal_(0.0, 0.02)
         m.bias.data.fill_(0)
 
+# Display command-line parameters onto the screen
 args = parser.parse_args()
 print(args)
 
 try:
-    os.makedirs(args.outf)
-except OSError:
+    os.makedirs(args.outf) # Create folder for saving intermediate checkpoints
+except OSError: # Error when the folder has existed
     pass
-
+# Check cuda in the computer
 if torch.cuda.is_available() and not args.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
-# need initialize!!
+# 3 networks have been inherits from nn.Module
 G_xvz = _G_xvz()
 G_vzx = _G_vzx()
 D_xvs = _D_xvs()
 
+# Initialize weights for networks
 G_xvz.apply(weights_init)
 G_vzx.apply(weights_init)
 D_xvs.apply(weights_init)
 
 
-train_list = args.data_list
+train_list = args.data_list # Path to image list for training
+# Dataloader is used to wrap outside of torch.utils.data.Dataset (or our custormized dataset - ImageList) for loading data efficiently
 train_loader = torch.utils.data.DataLoader(
     data_loader.ImageList( train_list, transform=transforms.Compose([
-        transforms.ToTensor(),
+        transforms.ToTensor(), # to range (0,1)
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) ])),
     batch_size=args.batch_size, shuffle=True,
     num_workers=args.workers, pin_memory=True)
@@ -107,14 +110,18 @@ v1 = Variable(v1)
 v2 = Variable(v2)
 z = Variable(z)
 
+# Function for loading weights from a given checkpoint
+# net: object of the network
+# path: path to folder containing checkpoints
+# name: name of a certain checkpoint file
 def load_model(net, path, name):
-    state_dict = torch.load('%s/%s' % (path,name))
-    own_state = net.state_dict()
+    state_dict = torch.load('%s/%s' % (path,name)) # Get dictionary of (name, weight) of checkpoint
+    own_state = net.state_dict() # Get dictionary of our network (need to be copy weights from checkpoint)
     for name, param in state_dict.items():
         if name not in own_state:
             print('not load weights %s' % name)
             continue
-        own_state[name].copy_(param)
+        own_state[name].copy_(param) # copy weight to existing parameter
         print('load weights %s' % name)
 
 #load_model(G_xvz, args.modelf, 'netG_xvz_epoch_24_699.pth')
@@ -127,12 +134,12 @@ batch_size = args.batch_size
 snapshot = args.nsnapshot
 start_time = time.time()
 
+# Using Adam for ultilizing parameters of networks
 G_xvz_solver = optim.Adam(G_xvz.parameters(), lr = lr, betas=ourBetas)
 G_vzx_solver = optim.Adam(G_vzx.parameters(), lr = lr, betas=ourBetas)
 D_xvs_solver = optim.Adam(D_xvs.parameters(), lr = lr, betas=ourBetas)
 
-cudnn.benchmark = True
-
+cudnn.benchmark = True # ??? For what
 crossEntropyLoss = nn.CrossEntropyLoss().cuda()
 
 for epoch in range(args.epochs):
@@ -142,32 +149,34 @@ for epoch in range(args.epochs):
         # This path to make sure G_vzx can generate good quality images with any random input
         # path 2: x-->G_xvz-->(v_bar, z_bar)-->G_vzx-->x_bar_bar--> D_xvs( (v,x_bar_bar), (v,x) ) + L1_loss(x_bar_bar, x)
         # This path to make sure G_xvz is the reverse of G_vzx
-        eps = random.uniform(0, 1)
-        tmp = random.uniform(0, 1)
+        eps = random.uniform(0, 1) # Specify how level to mix between one true distribution and one fake distribution
+        tmp = random.uniform(0, 1) # Specify for what strategy: fake reconstrution (from fake image) and real rescontruction (from true image)
         reconstruct_fake = False
         if tmp < 0.5:
             reconstruct_fake = True
-
+        
+        # Set zeros for gradients of all network (avoid the old gradients make following gradient results go wrong)
         D_xvs.zero_grad()
         G_xvz.zero_grad()
         G_vzx.zero_grad()
 
-        img1 = data1
+        img1 = data1 # mini-batch of images
         img2 = data2
 
-        # get x-->real image v--> view and z-->random vector
+        # Copy mini-batch of images to memory of Tensor Float x1, x2
         x1.data.resize_(img1.size()).copy_(img1)
         x2.data.resize_(img2.size()).copy_(img2)
-        v1.data.zero_()
+        v1.data.zero_() 
         v2.data.zero_()
-
+      
+        # Copy view labels for mini-batch
         for d in range(view1.size(0)):
             v1.data[d][view1[d]] = 1
 
         for d in range(view2.size(0)):
             v2.data[d][view2[d]] = 1
 
-        z.data.uniform_(-1, 1) # random z
+        z.data.uniform_(-1, 1) # random z in range of (-1,1)
         
         targetNP = v1.cpu().data.numpy()
         idxs = np.where(targetNP>0)[1]
