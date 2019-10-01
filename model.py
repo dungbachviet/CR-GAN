@@ -1,27 +1,31 @@
+# Implementing models of encoder, generator, discriminator
 import torch.nn as nn
 import torch.nn.parallel
 import torch
-import pdb
+import pdb # for debugging at the source-line level
 
 dd = pdb.set_trace
 
-v_siz = 9
-z_siz = 128 - v_siz
+v_siz = 9 # representing 9 viewpoints (for the view vector)
+z_siz = 128 - v_siz # representing dimension of the latent vector
 
-
+# Convolution --> Mean pooling
+# This class inherits the nn.Module package for customizing our own architecture
 class conv_mean_pool(nn.Module):
+    # inplanes: number of in-filters, outplanes: number of out-filters
     def __init__(self, inplanes, outplanes):
-        super(conv_mean_pool, self).__init__()
-        self.conv = nn.Conv2d(inplanes, outplanes, 3, 1, 1)
-        self.pooling = nn.AvgPool2d(2)
-
+        super(conv_mean_pool, self).__init__() # call __init__() from super class (nn.Module)
+        self.conv = nn.Conv2d(inplanes, outplanes, 3, 1, 1) # convolution layer with in-filter, out-filter, kernel, stride, padding
+        self.pooling = nn.AvgPool2d(2) # Average Pooling
+    
+    # Specify the flow of our own architecture
     def forward(self, x):
         out = x
         out = self.conv(out)
         out = self.pooling(out)
         return out
 
-
+# Mean Pooling --> Convolution
 class mean_pool_conv(nn.Module):
     def __init__(self, inplanes, outplanes):
         super(mean_pool_conv, self).__init__()
@@ -34,10 +38,12 @@ class mean_pool_conv(nn.Module):
         out = self.conv(out)
         return out
 
+# Upsample --> Convolution
+# Upsample: extend the size of orginal input (matrix) according to the given strategy ("nearest": repeat one value multiple times)
 class upsample_conv(nn.Module):
     def __init__(self, inplanes, outplanes):
         super(upsample_conv, self).__init__()
-        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest') # extend the input 2 times
         self.conv = nn.Conv2d(inplanes, outplanes, 3, 1, 1)
 
     def forward(self, x):
@@ -46,7 +52,7 @@ class upsample_conv(nn.Module):
         out = self.conv(out)
         return out
 
-
+# ??? Shortcut for what. What is the purpose of 'shortcut + out' ???
 class residualBlock_down(nn.Module): # for discriminator, no batchnorm
     def __init__(self, inplanes, outplanes):
         super(residualBlock_down, self).__init__()
