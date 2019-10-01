@@ -178,9 +178,10 @@ for epoch in range(args.epochs):
 
         z.data.uniform_(-1, 1) # random z in range of (-1,1)
         
-        targetNP = v1.cpu().data.numpy()
-        idxs = np.where(targetNP>0)[1]
-        tmp = torch.LongTensor(idxs)
+        # Because v1 are in gpu, we should give it in 'cpu' mode to use numpy functions
+        targetNP = v1.cpu().data.numpy() # 'cpu' mode
+        idxs = np.where(targetNP>0)[1] # return column indices at which satisfy the condition - (0-->8 representing 9 viewpoints)
+        tmp = torch.LongTensor(idxs) # save in format of LongTensor
         vv1 = Variable(tmp).cuda() # v1 target
 
         targetNP = v2.cpu().data.numpy()
@@ -191,40 +192,40 @@ for epoch in range(args.epochs):
         ## path 1: (v, z)-->G_vzx-->x_bar--> D_xvs( (v,x_bar), (v,x_real) )
         # path 1, update D_xvs
         x_bar = G_vzx(v1, z) # random z to generate img x_bar
-
         x_hat = eps*x1.data + (1-eps)*x_bar.data # interpolation of x_bar and x1
-        x_hat = Variable(x_hat, requires_grad=True)
+        x_hat = Variable(x_hat, requires_grad=True) # afterwards we want to make derivation to x_hat therefore we set requires_grad=true (defaultly = false)
         D_x_hat_v, D_x_hat_s = D_xvs(x_hat)
-
+        
+        # Make derivation the function D_x_hat_s to x_hat (minibatch)
         grads = autograd.grad(outputs = D_x_hat_s,
                               inputs = x_hat,
                               grad_outputs = torch.ones(D_x_hat_s.size()).cuda(),
-                              retain_graph = True,
+                              retain_graph = True,th 1: (v, z)-->G_vzx-->x_bar--> D_xvs( (v,x_bar), (v,x_real) )
                               create_graph = True,
                               only_inputs = True)[0]
         grad_norm = grads.pow(2).sum().sqrt()
         gp_loss = torch.mean((grad_norm - 1) ** 2) # gradient with v1
 
         x_bar_loss_v, x_bar_loss_s = D_xvs(x_bar.detach()) # score of x_bar
-        x_bar_loss_s = x_bar_loss_s.mean()
+        x_bar_loss_s = x_bar_loss_s.mean() # mean of mini-batch
 
         x_loss_v, x_loss_s = D_xvs(x1) # score of x1
-        x_loss_s = x_loss_s.mean()
+        x_loss_s = x_loss_s.mean() # mean of mini-batch
 
         v_loss_x = crossEntropyLoss(x_loss_v, vv1) # ACGAN loss of x1(v1)
         
         d_xvs_loss = x_bar_loss_s - x_loss_s + 10. * gp_loss + v_loss_x # x1 real sample, x_bar fake sample
-        d_xvs_loss.backward()
-        D_xvs_solver.step()
+        d_xvs_loss.backward() # make gradient descent on weights of D_xvs
+        D_xvs_solver.step() # Make optimization
 
         # path 1, update G_vzx
+        # Set zeros to old gradient values
         D_xvs.zero_grad()
         G_xvz.zero_grad()
         G_vzx.zero_grad()
 
         x_bar_loss_v, x_bar_loss_s = D_xvs(x_bar) # score of x_bar
-        x_bar_loss_s = x_bar_loss_s.mean()
-
+        x_bar_loss_s = x_bar_loss_s.mean() # mean of mini-batch
         v_loss_x_bar = crossEntropyLoss(x_bar_loss_v, vv1) # ACGAN loss of x_bar(v1)
 
         g_vzx_loss = -x_bar_loss_s + v_loss_x_bar
@@ -233,6 +234,7 @@ for epoch in range(args.epochs):
 
         ## path 2: x-->G_xvz-->(v_bar, z_bar)-->G_vzx-->x_bar_bar--> D_xvs( (v,x_bar_bar), (v,x) ) + L1_loss(x_bar_bar, x)
         # path 2, update D_x
+        # Set zeros for old gradient values
         D_xvs.zero_grad()
         G_xvz.zero_grad()
         G_vzx.zero_grad()
@@ -259,10 +261,9 @@ for epoch in range(args.epochs):
         gp_loss = torch.mean((grad_norm - 1) ** 2)
         
         x_loss_v, x_loss_s = D_xvs(x2)
-        x_loss_s = x_loss_s.mean()
+        x_loss_s = x_loss_s.mean() # mean for mini-batch
         x_bar_bar_loss_v, x_bar_bar_loss_s = D_xvs(x_bar_bar.detach()) # x_bar_bar score
-        x_bar_bar_loss_s = x_bar_bar_loss_s.mean()
-        
+        x_bar_bar_loss_s = x_bar_bar_loss_s.mean() # mean for mini-batch
         v_loss_x = crossEntropyLoss(x_loss_v, vv2) # ACGAN loss of x2(v2)
 
         d_x_loss = x_bar_bar_loss_s - x_loss_s + 10. * gp_loss + v_loss_x
@@ -271,7 +272,7 @@ for epoch in range(args.epochs):
 
         # 2st path, update G_xvz
         x_bar_bar_loss_v, x_bar_bar_loss_s = D_xvs(x_bar_bar) # x_bar_bar score
-        x_bar_bar_loss_s = x_bar_bar_loss_s.mean()
+        x_bar_bar_loss_s = x_bar_bar_loss_s.mean() # mean for mini-batch
         
         if reconstruct_fake is True:
             x_l1_loss = L1_loss(x_bar_bar, x_bar.detach())
@@ -285,16 +286,16 @@ for epoch in range(args.epochs):
         g_loss.backward()
 
 
-        if reconstruct_fake is False:
-            G_vzx_solver.step()
+        if reconstruct_fake is False: # is it wrong??? 
+            G_vzx_solver.step() # ???? G_xvz_solver, not G_vzx_solver 
         
-        G_xvz_solver.step()
+        G_xvz_solver.step() # ??? Is it wrong
 
         print("Epoch: [%2d] [%4d/%4d] time: %4.4f, "
               "loss_D_vx: %.4f, loss_D_x: %.4f, loss_G: %.4f"
               % (epoch, i, len(data1), time.time() - start_time,
                  d_xvs_loss.data[0], d_x_loss.data[0], g_loss.data[0]))
-        if i % snapshot == snapshot-1:
+        if i % snapshot == snapshot-1: # Using vutils for save intermediate images
             vutils.save_image(x_bar.data,
                               '%s/x_bar_epoch_%03d_%04d.png' % (args.outf, epoch, i),normalize=True)
             vutils.save_image(x_bar_bar.data,
